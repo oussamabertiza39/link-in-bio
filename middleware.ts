@@ -1,14 +1,28 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-import { prisma } from '@/lib/prisma';
+async function isMaintenanceMode(req: Request) {
+  try {
+    const response = await fetch(new URL('/api/public/settings', req.url), {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { 'x-middleware-request': '1' },
+    });
+
+    if (!response.ok) return false;
+    const data = await response.json();
+    return Boolean(data?.maintenanceMode);
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(req: Request) {
   const { pathname } = new URL(req.url);
   const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET });
+  const maintenanceMode = await isMaintenanceMode(req);
 
-  const setting = await prisma.appSetting.upsert({ where: { id: 'global' }, update: {}, create: { id: 'global' } });
-  if (setting.maintenanceMode && !token?.id) {
+  if (maintenanceMode && !token?.id) {
     return NextResponse.redirect(new URL('/maintenance', req.url));
   }
 
